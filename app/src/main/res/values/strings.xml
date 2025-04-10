@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Irpa</string>
+    <string name="server_address">tcp://192.168.106.121:8888</string>
+
+</resources>
