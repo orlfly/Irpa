@@ -1,4 +1,4 @@
-package com.kingsware.irpa;
+package com.kingsware.irpa.zeromq;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -21,18 +21,17 @@ public class MqMessage<T> {
     @JsonProperty("type")
     private String type;
     @JsonProperty("message")
-    private Map<String,T> message = new HashMap<String,T>();
+    private T message;
     public MqMessage(){
         this.uuid=UUID.randomUUID().toString();
         this.type=OPERATION;
-        this.message=new HashMap<String,T>();
     }
-    public MqMessage(String type,Map<String,T> message){
+    public MqMessage(String type,T message){
         this.uuid=UUID.randomUUID().toString();
         this.type=type;
         this.message=message;
     }
-    public MqMessage(String uuid,String type,Map<String,T> message){
+    public MqMessage(String uuid,String type,T message){
         this.uuid=uuid;
         this.type=type;
         this.message=message;
@@ -47,12 +46,12 @@ public class MqMessage<T> {
     }
 
     @JsonProperty("message")
-    public Map<String,T> getMessage() {
+    public T getMessage() {
         return message;
     }
 
     @JsonProperty("message")
-    public void setMessage(Map<String,T> message) {
+    public void setMessage(T message) {
         this.message = message;
     }
 

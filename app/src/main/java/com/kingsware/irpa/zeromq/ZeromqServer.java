@@ -1,4 +1,4 @@
-package com.kingsware.irpa;
+package com.kingsware.irpa.zeromq;
 import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.zeromq.ZMQ;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
@@ -31,10 +32,10 @@ public class ZeromqServer implements Runnable {
         public void handleMessage(@NonNull Message message) {
             Log.i(TAG, "Received message: " + message.getData());
             try {
-                Map<String,String> msg = (Map<String,String>)message.getData().getSerializable("message");
+                Serializable msg = (Serializable)message.getData().get("message");
                 Log.i(TAG, "message: " + msg);
                 if ( msg != null) {
-                    MqMessage<String> mqMsg= new MqMessage<String>(message.getData().getString("uuid"),MqMessage.OPERATION, msg);
+                    MqMessage<Serializable> mqMsg= new MqMessage<Serializable>(message.getData().getString("uuid"),MqMessage.OPERATION, msg);
                     String response = mapper.writeValueAsString(mqMsg);
                     Log.i(TAG, "Send response: " + response);
                     socket.send(response.getBytes(ZMQ.CHARSET), 0);
@@ -44,11 +45,11 @@ public class ZeromqServer implements Runnable {
             }
         }
     };
-    public static Message bundledMessage(Handler handler, MqMessage<String> msg) {
+    public static Message bundledMessage(Handler handler, MqMessage<HashMap<String,String>> msg) {
         Message m = handler.obtainMessage();
         Bundle data = new Bundle();
         data.putString("uuid",msg.getUuid());
-        data.putSerializable("message", (HashMap<String,String>)msg.getMessage());
+        data.putSerializable("message", msg.getMessage());
         m.setData(data);
         m.setTarget(handler);
         return m;
@@ -70,7 +71,7 @@ public class ZeromqServer implements Runnable {
                     Map<String, String> message = new HashMap<>();
                     message.put("agent",agentId);
                     message.put("status","on");
-                    String heartbeatMessage = mapper.writeValueAsString(new MqMessage<String>(MqMessage.HEARTBEAT, message));
+                    String heartbeatMessage = mapper.writeValueAsString(new MqMessage<Map<String, String>>(MqMessage.HEARTBEAT, message));
                     Log.i(TAG, "Send"+heartbeatMessage);
                     socket.send(heartbeatMessage.getBytes(ZMQ.CHARSET), 0);
                 } catch (JsonProcessingException e) {
@@ -98,7 +99,7 @@ public class ZeromqServer implements Runnable {
                 String receivedMessage = new String(message, ZMQ.CHARSET);
                 Log.i(TAG, "recv:"+receivedMessage);
                 try {
-                    MqMessage<String> msg = mapper.readValue(receivedMessage, new TypeReference<MqMessage<String>>() {});
+                    MqMessage<HashMap<String,String>> msg = mapper.readValue(receivedMessage, new TypeReference<MqMessage<HashMap<String,String>>>() {});
                     msgHandler.handleMessage(bundledMessage(resHandler, msg));
                 } catch (JsonProcessingException e) {
                     throw new RuntimeException(e);

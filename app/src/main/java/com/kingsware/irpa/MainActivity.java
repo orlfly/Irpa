@@ -21,9 +21,13 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.kingsware.irpa.zeromq.ZeromqService;
+
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private ActivityResultLauncher<Intent> overlayPermissionLauncher;
+
+    ZeromqService mqService;
 
     private final ServiceConnection mqConnection = new ServiceConnection() {
         @Override
@@ -32,7 +36,7 @@ public class MainActivity extends AppCompatActivity {
                 String data=null;
             //通过IBinder获取Service句柄
             ZeromqService.LocalBinder binder=(ZeromqService.LocalBinder)service;
-            ZeromqService mqService=binder.getService();
+            mqService = binder.getService();
         }
 
         @Override

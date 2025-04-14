@@ -13,6 +13,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.kingsware.irpa.zeromq.ZeromqService;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
