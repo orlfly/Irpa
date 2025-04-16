@@ -36,18 +36,16 @@ public class ZeromqService extends Service {
     
     ArrayList<Map<String,String>> appList=new ArrayList<>();
 
+    private MessageDisplayer messageDisplayer = null;
     private AutoAccessibilityService autoAccessibilityService=null;
-    private FloatingWindowService.WeakReferenceHandler uiHandler=null;
     public void setAutoAccessibilityService(AutoAccessibilityService autoAccessibilityService) {
         this.autoAccessibilityService = autoAccessibilityService;
     }
-    public void setUIHandler(FloatingWindowService.WeakReferenceHandler handler) {
-        uiHandler = handler;
+
+    public void setMessageDisplayer(MessageDisplayer messageDisplayer) {
+        this.messageDisplayer = messageDisplayer;
     }
 
-    public void clearUIHandler() {
-        uiHandler = null;
-    }
     @SuppressLint("HandlerLeak")
     private final Handler msgHandler = new Handler() {
         public void handleMessage(@NonNull Message message) {
@@ -77,8 +75,17 @@ public class ZeromqService extends Service {
                         data.putSerializable("message", "stop fin");
                         break;
                     case "display":
-                        if(uiHandler!=null){
-                            uiHandler.sendMessage(msg);
+                        if(messageDisplayer!=null){
+                            if(msg.containsKey("text")) {
+                                String text = msg.get("text");
+
+                                if (msg.containsKey("duration")) {
+                                    int duration = Integer.parseInt(msg.get("duration"));
+                                    messageDisplayer.displayMessage(text, duration);
+                                } else {
+                                    messageDisplayer.displayMessage(text);
+                                }
+                            }
                         }
                         data.putSerializable("message", "display fin");
                     default:

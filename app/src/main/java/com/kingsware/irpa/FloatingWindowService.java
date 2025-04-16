@@ -29,6 +29,7 @@ import androidx.annotation.DrawableRes;
 import androidx.core.app.NotificationCompat;
 
 import com.kingsware.irpa.automation.AutoAccessibilityService;
+import com.kingsware.irpa.zeromq.MessageDisplayer;
 import com.kingsware.irpa.zeromq.ZeromqService;
 
 import java.lang.ref.WeakReference;
@@ -44,40 +45,25 @@ public class FloatingWindowService extends Service {
     private long lastClickTime = 0;
 
     ZeromqService mqService;
+    private Handler mHandler = new Handler(Looper.getMainLooper());
 
-    private Handler uiHandler = new Handler(Looper.getMainLooper()) {
+    private final MessageDisplayer messageDisplayer = new MessageDisplayer() {
         @Override
-        public void handleMessage(Message msg) {
-            if (msg.what == 1) {
-                Map<String,String> data = (Map<String,String>) msg.obj;
-                String text =null;
-                if(data.containsKey("text")){
-                    text = (String)data.get("text");
-                }
-                if(data.containsKey("duration")){
-                    int duration = Integer.parseInt(Objects.requireNonNull(data.get("duration")));
-                    updateMessage(text, duration);
-                } else {
-                    updateMessage(text);
-                }
-            }
+        public void displayMessage(String message) {
+            Runnable task = ()->{
+                updateMessage(message);
+            };
+            mHandler.post(task);
+        }
+
+        @Override
+        public void displayMessage(String message, int duration) {
+            Runnable task = ()->{
+                updateMessage(message, duration*1000);
+            };
+            mHandler.post(task);
         }
     };
-    public static class WeakReferenceHandler {
-        private final WeakReference<Handler> mHandlerRef;
-
-        public WeakReferenceHandler(Handler handler) {
-            mHandlerRef = new WeakReference<>(handler);
-        }
-
-        public void sendMessage(Map<String,String> data) {
-            Handler handler = mHandlerRef.get();
-            if (handler != null) {
-                Message msg = handler.obtainMessage(1, data);
-                handler.sendMessage(msg);
-            }
-        }
-    }
     private final ServiceConnection mqConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service){
@@ -98,7 +84,7 @@ public class FloatingWindowService extends Service {
             }
             AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.getInstance();
             mqService.setAutoAccessibilityService(autoAccessibilityService);
-            mqService.setUIHandler(new WeakReferenceHandler(uiHandler));
+            mqService.setMessageDisplayer(messageDisplayer);
         }
 
         @Override
@@ -208,18 +194,10 @@ public class FloatingWindowService extends Service {
             TextView tv = floatingView.findViewById(R.id.tv_message);
             String oldMessage = tv.getText().toString();
             updateMessage(newMessage);
-            TimerTask durationTask = new TimerTask() {
-                @Override
-                public void run() {
-                    Log.d(Context.ACTIVITY_SERVICE, "Change Message .......");
-                    Map<String,String> msg = new HashMap<String,String>();
-                    msg.put("text",oldMessage);
-                    WeakReferenceHandler handle = new WeakReferenceHandler(uiHandler);
-                    handle.sendMessage(msg);
-                }
+            Runnable task = ()->{
+                updateMessage(oldMessage);
             };
-            Timer timer = new Timer("duration");
-            timer.schedule(durationTask,duration*1000);
+            mHandler.postDelayed(task,duration);
         }
     }
 
@@ -255,9 +233,6 @@ public class FloatingWindowService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (floatingView != null) windowManager.removeView(floatingView);
-        if(mqService != null) {
-            mqService.clearUIHandler();
-        }
         unbindService(mqConnection);
     }
 
