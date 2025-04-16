@@ -21,29 +21,12 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.kingsware.irpa.automation.AutoAccessibilityService;
 import com.kingsware.irpa.zeromq.ZeromqService;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private ActivityResultLauncher<Intent> overlayPermissionLauncher;
-
-    ZeromqService mqService;
-
-    private final ServiceConnection mqConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service){
-            Log.i(Context.ACTIVITY_SERVICE, "Service Connected");
-                String data=null;
-            //通过IBinder获取Service句柄
-            ZeromqService.LocalBinder binder=(ZeromqService.LocalBinder)service;
-            mqService = binder.getService();
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            Log.i(Context.ACTIVITY_SERVICE, "Service Disconnected");
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,9 +43,6 @@ public class MainActivity extends AppCompatActivity {
         );
 
         new Handler(Looper.getMainLooper()).postDelayed(this::checkOverlayPermission, 2000);
-
-        Intent intent=new Intent(this,ZeromqService.class);
-        bindService(intent,this.mqConnection,Context.BIND_AUTO_CREATE);
     }
 
     private void animateRobotIcon(ImageView ivRobot) {

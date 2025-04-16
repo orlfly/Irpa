@@ -30,14 +30,14 @@ public class ZeromqServer implements Runnable {
     private final Handler resHandler = new Handler() {
 
         public void handleMessage(@NonNull Message message) {
-            Log.i(TAG, "Received message: " + message.getData());
+            Log.d(TAG, "Received message: " + message.getData());
             try {
                 Serializable msg = (Serializable)message.getData().get("message");
-                Log.i(TAG, "message: " + msg);
+                Log.d(TAG, "message: " + msg);
                 if ( msg != null) {
                     MqMessage<Serializable> mqMsg= new MqMessage<Serializable>(message.getData().getString("uuid"),MqMessage.OPERATION, msg);
                     String response = mapper.writeValueAsString(mqMsg);
-                    Log.i(TAG, "Send response: " + response);
+                    Log.d(TAG, "Send response: " + response);
                     socket.send(response.getBytes(ZMQ.CHARSET), 0);
                 }
             } catch (JsonProcessingException e) {
@@ -59,7 +59,7 @@ public class ZeromqServer implements Runnable {
         context = ZMQ.context(1);
         socket = context.socket(ZMQ.DEALER);
         socket.setIdentity(agentId.getBytes(ZMQ.CHARSET));
-        Log.i(TAG, "Mq connect:"+addr);
+        Log.d(TAG, "Mq connect:"+addr);
         socket.connect(addr);
 
         TimerTask heartbeat = new TimerTask() {
@@ -67,12 +67,12 @@ public class ZeromqServer implements Runnable {
             @Override
             public void run() {
                 try {
-                    Log.i(TAG, "Send heartbeat.......");
+                    Log.d(TAG, "Send heartbeat.......");
                     Map<String, String> message = new HashMap<>();
                     message.put("agent",agentId);
                     message.put("status","on");
                     String heartbeatMessage = mapper.writeValueAsString(new MqMessage<Map<String, String>>(MqMessage.HEARTBEAT, message));
-                    Log.i(TAG, "Send"+heartbeatMessage);
+                    Log.d(TAG, "Send "+heartbeatMessage);
                     socket.send(heartbeatMessage.getBytes(ZMQ.CHARSET), 0);
                 } catch (JsonProcessingException e) {
                     throw new RuntimeException(e);
@@ -93,11 +93,11 @@ public class ZeromqServer implements Runnable {
     @Override
     public void run() {
         while(!Thread.currentThread().isInterrupted()) {
-            Log.i(TAG, "recv..............");
+            Log.d(TAG, "recv..............");
             byte[] message = socket.recv(0);
             if (message != null) {
                 String receivedMessage = new String(message, ZMQ.CHARSET);
-                Log.i(TAG, "recv:"+receivedMessage);
+                Log.d(TAG, "recv:"+receivedMessage);
                 try {
                     MqMessage<HashMap<String,String>> msg = mapper.readValue(receivedMessage, new TypeReference<MqMessage<HashMap<String,String>>>() {});
                     msgHandler.handleMessage(bundledMessage(resHandler, msg));

@@ -5,9 +5,17 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.graphics.PixelFormat;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
+import android.provider.Settings;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -20,16 +28,93 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
 import androidx.core.app.NotificationCompat;
 
+import com.kingsware.irpa.automation.AutoAccessibilityService;
+import com.kingsware.irpa.zeromq.ZeromqService;
+
+import java.lang.ref.WeakReference;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Timer;
+import java.util.TimerTask;
+
 public class FloatingWindowService extends Service {
     private WindowManager windowManager;
     private View floatingView;
     private long lastClickTime = 0;
+
+    ZeromqService mqService;
+
+    private Handler uiHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            if (msg.what == 1) {
+                Map<String,String> data = (Map<String,String>) msg.obj;
+                String text =null;
+                if(data.containsKey("text")){
+                    text = (String)data.get("text");
+                }
+                if(data.containsKey("duration")){
+                    int duration = Integer.parseInt(Objects.requireNonNull(data.get("duration")));
+                    updateMessage(text, duration);
+                } else {
+                    updateMessage(text);
+                }
+            }
+        }
+    };
+    public static class WeakReferenceHandler {
+        private final WeakReference<Handler> mHandlerRef;
+
+        public WeakReferenceHandler(Handler handler) {
+            mHandlerRef = new WeakReference<>(handler);
+        }
+
+        public void sendMessage(Map<String,String> data) {
+            Handler handler = mHandlerRef.get();
+            if (handler != null) {
+                Message msg = handler.obtainMessage(1, data);
+                handler.sendMessage(msg);
+            }
+        }
+    }
+    private final ServiceConnection mqConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service){
+            Log.i(Context.ACTIVITY_SERVICE, "Service Connected");
+            String data=null;
+            //通过IBinder获取Service句柄
+            ZeromqService.LocalBinder binder=(ZeromqService.LocalBinder)service;
+            mqService = binder.getService();
+            boolean isEnabled = AutoAccessibilityService.isAccessibilityServiceEnabled(getApplicationContext(),AutoAccessibilityService.class);
+            if (isEnabled) {
+                Log.d("Accessibility", "服务已启用");
+            } else {
+                Log.d("Accessibility", "服务未启用");
+                // 引导用户前往设置页面
+                Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+            AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.getInstance();
+            mqService.setAutoAccessibilityService(autoAccessibilityService);
+            mqService.setUIHandler(new WeakReferenceHandler(uiHandler));
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.i(Context.ACTIVITY_SERVICE, "Service Disconnected");
+        }
+    };
 
     @Override
     public void onCreate() {
         super.onCreate();
         createFloatingWindow();
         startForeground(1, createNotification());
+
+        Intent intent=new Intent(this,ZeromqService.class);
+        bindService(intent,this.mqConnection,Context.BIND_AUTO_CREATE);
     }
 
     private void createFloatingWindow() {
@@ -118,6 +203,25 @@ public class FloatingWindowService extends Service {
                     .start();
         }
     }
+    public void updateMessage(String newMessage, int duration) {
+        if (floatingView != null) {
+            TextView tv = floatingView.findViewById(R.id.tv_message);
+            String oldMessage = tv.getText().toString();
+            updateMessage(newMessage);
+            TimerTask durationTask = new TimerTask() {
+                @Override
+                public void run() {
+                    Log.d(Context.ACTIVITY_SERVICE, "Change Message .......");
+                    Map<String,String> msg = new HashMap<String,String>();
+                    msg.put("text",oldMessage);
+                    WeakReferenceHandler handle = new WeakReferenceHandler(uiHandler);
+                    handle.sendMessage(msg);
+                }
+            };
+            Timer timer = new Timer("duration");
+            timer.schedule(durationTask,duration*1000);
+        }
+    }
 
     public void changeIcon(@DrawableRes int iconRes, @ColorInt int color) {
         if (floatingView != null) {
@@ -151,6 +255,10 @@ public class FloatingWindowService extends Service {
     public void onDestroy() {
         super.onDestroy();
         if (floatingView != null) windowManager.removeView(floatingView);
+        if(mqService != null) {
+            mqService.clearUIHandler();
+        }
+        unbindService(mqConnection);
     }
 
     @Override

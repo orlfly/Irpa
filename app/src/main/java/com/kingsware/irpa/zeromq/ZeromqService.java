@@ -16,6 +16,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.kingsware.irpa.FloatingWindowService;
 import com.kingsware.irpa.R;
 import com.kingsware.irpa.automation.AutoAccessibilityService;
 
@@ -35,6 +36,18 @@ public class ZeromqService extends Service {
     
     ArrayList<Map<String,String>> appList=new ArrayList<>();
 
+    private AutoAccessibilityService autoAccessibilityService=null;
+    private FloatingWindowService.WeakReferenceHandler uiHandler=null;
+    public void setAutoAccessibilityService(AutoAccessibilityService autoAccessibilityService) {
+        this.autoAccessibilityService = autoAccessibilityService;
+    }
+    public void setUIHandler(FloatingWindowService.WeakReferenceHandler handler) {
+        uiHandler = handler;
+    }
+
+    public void clearUIHandler() {
+        uiHandler = null;
+    }
     @SuppressLint("HandlerLeak")
     private final Handler msgHandler = new Handler() {
         public void handleMessage(@NonNull Message message) {
@@ -50,14 +63,24 @@ public class ZeromqService extends Service {
                         data.putSerializable("message", appList);
                         break;
                     case "start":
-                        String packageName = msg.get("packageName");
-                        AutoAccessibilityService.getInstance().launchApp(packageName);
+                        String startPackageName = msg.get("packageName");
+                        if(autoAccessibilityService!=null) {
+                            autoAccessibilityService.launchApp(startPackageName);
+                        }
                         data.putSerializable("message", "start fin");
                         break;
                     case "stop":
-                    case "install":
-                    case "uninstall":
-                    case "update":
+                        String staopPackageName = msg.get("packageName");
+                        if(autoAccessibilityService!=null) {
+                            autoAccessibilityService.stopApp(staopPackageName);
+                        }
+                        data.putSerializable("message", "stop fin");
+                        break;
+                    case "display":
+                        if(uiHandler!=null){
+                            uiHandler.sendMessage(msg);
+                        }
+                        data.putSerializable("message", "display fin");
                     default:
                         break;
                 }
@@ -86,7 +109,6 @@ public class ZeromqService extends Service {
             appList.add(resp);
         }
         Log.i(TAG, "App list:"+appList);
-        startService(new Intent(this, AutoAccessibilityService.class));
         Log.i(TAG, "server start");
         ZeromqServer server = new ZeromqServer(agentId, getServerAddress(), msgHandler);
         Thread zmqThread = new Thread(server);
