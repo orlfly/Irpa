@@ -13,8 +13,6 @@ import android.graphics.PixelFormat;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.os.Message;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -28,24 +26,15 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
 import androidx.core.app.NotificationCompat;
 
-import com.kingsware.irpa.automation.AutoAccessibilityService;
 import com.kingsware.irpa.zeromq.MessageDisplayer;
 import com.kingsware.irpa.zeromq.ZeromqService;
-
-import java.lang.ref.WeakReference;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class FloatingWindowService extends Service {
     private WindowManager windowManager;
     private View floatingView;
     private long lastClickTime = 0;
 
-    ZeromqService mqService;
-    private Handler mHandler = new Handler(Looper.getMainLooper());
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
 
     private final MessageDisplayer messageDisplayer = new MessageDisplayer() {
         @Override
@@ -71,19 +60,7 @@ public class FloatingWindowService extends Service {
             String data=null;
             //通过IBinder获取Service句柄
             ZeromqService.LocalBinder binder=(ZeromqService.LocalBinder)service;
-            mqService = binder.getService();
-            boolean isEnabled = AutoAccessibilityService.isAccessibilityServiceEnabled(getApplicationContext(),AutoAccessibilityService.class);
-            if (isEnabled) {
-                Log.d("Accessibility", "服务已启用");
-            } else {
-                Log.d("Accessibility", "服务未启用");
-                // 引导用户前往设置页面
-                Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            }
-            AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.getInstance();
-            mqService.setAutoAccessibilityService(autoAccessibilityService);
+            ZeromqService mqService = binder.getService();
             mqService.setMessageDisplayer(messageDisplayer);
         }
 
@@ -99,7 +76,7 @@ public class FloatingWindowService extends Service {
         createFloatingWindow();
         startForeground(1, createNotification());
 
-        Intent intent=new Intent(this,ZeromqService.class);
+        Intent intent=new Intent(this, ZeromqService.class);
         bindService(intent,this.mqConnection,Context.BIND_AUTO_CREATE);
     }
 

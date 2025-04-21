@@ -2,11 +2,14 @@ package com.kingsware.irpa.zeromq;
 
 import android.annotation.SuppressLint;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,9 +19,9 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.kingsware.irpa.FloatingWindowService;
 import com.kingsware.irpa.R;
 import com.kingsware.irpa.automation.AutoAccessibilityService;
+import com.kingsware.irpa.automation.ScreenCaptureService;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,8 +39,11 @@ public class ZeromqService extends Service {
     
     ArrayList<Map<String,String>> appList=new ArrayList<>();
 
+    private ScreenCaptureService screenCaptureService=null;
+
     private MessageDisplayer messageDisplayer = null;
     private AutoAccessibilityService autoAccessibilityService=null;
+
     public void setAutoAccessibilityService(AutoAccessibilityService autoAccessibilityService) {
         this.autoAccessibilityService = autoAccessibilityService;
     }
@@ -45,6 +51,26 @@ public class ZeromqService extends Service {
     public void setMessageDisplayer(MessageDisplayer messageDisplayer) {
         this.messageDisplayer = messageDisplayer;
     }
+
+    public void setScreenCaptureService(ScreenCaptureService screenCaptureService) {
+        this.screenCaptureService = screenCaptureService;
+    }
+
+    private final ServiceConnection ssConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service){
+            Log.i(TAG, "Service Connected");
+            //通过IBinder获取Service句柄
+            ScreenCaptureService.LocalBinder binder=(ScreenCaptureService.LocalBinder)service;
+            ScreenCaptureService ssService = binder.getService();
+            setScreenCaptureService(ssService);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.i(TAG, "Service Disconnected");
+        }
+    };
 
     @SuppressLint("HandlerLeak")
     private final Handler msgHandler = new Handler() {
@@ -62,8 +88,18 @@ public class ZeromqService extends Service {
                         break;
                     case "start":
                         String startPackageName = msg.get("packageName");
+                        Log.d(TAG, "start: "+startPackageName+":");
                         if(autoAccessibilityService!=null) {
                             autoAccessibilityService.launchApp(startPackageName);
+                        }
+                        data.putSerializable("message", "start fin");
+                        break;
+                    case "goto":
+                        String targetPackageName = msg.get("packageName");
+                        String targetActivityName = msg.get("activityName");
+                        Log.d(TAG, "start: "+targetPackageName+":"+targetActivityName);
+                        if(autoAccessibilityService!=null) {
+                            autoAccessibilityService.launchActivity(targetPackageName, targetActivityName);
                         }
                         data.putSerializable("message", "start fin");
                         break;
@@ -88,6 +124,13 @@ public class ZeromqService extends Service {
                             }
                         }
                         data.putSerializable("message", "display fin");
+                    case "screenshot":
+                        String base64="";
+                        if(screenCaptureService!=null) {
+                            base64 = screenCaptureService.screenshot();
+                        }
+                        data.putSerializable("message", base64);
+                        break;
                     default:
                         break;
                 }
@@ -104,7 +147,21 @@ public class ZeromqService extends Service {
             return ZeromqService.this;
         }
     }
+    private String getLauncherActivityName(String packageName) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+            intent.setPackage(packageName);
 
+            List<ResolveInfo> resolveInfos = getPackageManager().queryIntentActivities(intent, 0);
+            if (!resolveInfos.isEmpty()) {
+                return resolveInfos.get(0).activityInfo.name;
+            }
+        } catch (Exception e) {
+            Log.d("PackageUtils", "Error: " + e.getMessage());
+        }
+        return null;
+    }
     @Override
     public void onCreate() {
         super.onCreate();
@@ -113,6 +170,7 @@ public class ZeromqService extends Service {
             HashMap<String,String> resp = new HashMap<String,String>();
             resp.put("name", getPackageManager().getApplicationLabel(app).toString());
             resp.put("package", app.packageName);
+            resp.put("mainActivity", getLauncherActivityName(app.packageName));
             appList.add(resp);
         }
         Log.i(TAG, "App list:"+appList);
@@ -120,6 +178,9 @@ public class ZeromqService extends Service {
         ZeromqServer server = new ZeromqServer(agentId, getServerAddress(), msgHandler);
         Thread zmqThread = new Thread(server);
         zmqThread.start();
+
+        Intent intent=new Intent(this, ScreenCaptureService.class);
+        bindService(intent,this.ssConnection,Context.BIND_AUTO_CREATE);
     }
 
     @Override
