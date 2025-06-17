@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Rect;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
@@ -19,6 +20,9 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kingsware.irpa.R;
 import com.kingsware.irpa.automation.AutoAccessibilityService;
 import com.kingsware.irpa.automation.ScreenCaptureService;
@@ -34,6 +38,7 @@ public class ZeromqService extends Service {
     private static final String TAG = "ZeromqService";
     private static final String PREFS_NAME = "ZeromqPrefs";
     private static final String KEY_SERVER_ADDRESS = "server_address";
+    final ObjectMapper mapper = new ObjectMapper();
 
     String agentId = "agent_"+UUID.randomUUID().toString();
     
@@ -130,6 +135,31 @@ public class ZeromqService extends Service {
                             base64 = screenCaptureService.screenshot();
                         }
                         data.putSerializable("message", base64);
+                        break;
+                    case "click":
+                        String rectStr = msg.get("rect");
+                        if(autoAccessibilityService!=null) {
+                            try {
+                                List<Integer> listRect =  mapper.readValue(rectStr, new TypeReference<List<Integer>>() {});
+                                Rect rect = new Rect();
+                                rect.set(listRect.get(0),listRect.get(1),listRect.get(2),listRect.get(3));
+                                autoAccessibilityService.click(rect);
+                                data.putSerializable("message", "Operate fin!");
+                            } catch (JsonProcessingException e) {
+                                data.putSerializable("message", "Operate ERROR!");
+                            }
+                        }
+                        break;
+                    case "swipe":
+                        if(autoAccessibilityService!=null) {
+                            try {
+                                int swipeType = Integer.parseInt(msg.get("type"));
+                                autoAccessibilityService.swipe(swipeType);
+                                data.putSerializable("message", "Operate fin!");
+                            } catch (Exception e) {
+                                data.putSerializable("message", "Operate ERROR!");
+                            }
+                        }
                         break;
                     default:
                         break;
